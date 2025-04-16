@@ -144,6 +144,4 @@ if not logs_df.empty:
         ax.set_ylabel("Frequency")
         st.pyplot(fig)
 
-st.markdown("---")
-st.markdown("💬 **Need help interpreting results or logs? Ask below or re-upload!**")
-st.caption("🔧 Built with ❤️ using Streamlit · SQLite · Scikit-learn · Python — by LogWise")
+
