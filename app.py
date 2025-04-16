@@ -11,7 +11,16 @@ st.markdown("Welcome to **LogWise**! Upload your log file and watch it work: �
 
 DB_NAME = "logs.db"
 
-# --- Database Setup ---
+# --- Reset Database Every Refresh ---
+def reset_db():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS logs")
+    cursor.execute("DROP TABLE IF EXISTS chat_history")
+    conn.commit()
+    conn.close()
+
+# --- Initialize Tables ---
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -47,7 +56,6 @@ def fetch_logs():
 def detect_anomalies(df):
     if df.empty or len(df) < 10:
         return df, []
-
     df['length'] = df['message'].str.len()
     model = IsolationForest(contamination=0.1, random_state=42)
     df['anomaly'] = model.fit_predict(df[['length']])
@@ -82,8 +90,9 @@ def fetch_chat():
     conn.close()
     return df
 
-# --- Init ---
-init_db()
+# --- Run Initialization ---
+reset_db()   # <--- Clears database every refresh
+init_db()    # <--- Then re-creates tables
 
 # --- Upload Log File ---
 st.chat_message("user").markdown("📂 Upload a log file (`.log` or `.txt`) to get started:")
@@ -104,7 +113,7 @@ if uploaded_file:
 # --- Display Chat History from DB ---
 chat_df = fetch_chat()
 if not chat_df.empty:
-    st.subheader("🗨️ Chat History (Persistent)")
+    st.subheader("🗨️ Chat History (Session Only)")
     for _, row in chat_df.iterrows():
         st.chat_message(row["role"]).markdown(row["message"])
 
