@@ -1,17 +1,17 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-import os
 from sklearn.ensemble import IsolationForest
 import matplotlib.pyplot as plt
-import io
-import datetime
 
-st.set_page_config(page_title="AI-Driven Log Aggregator", layout="wide")
+# --- App Setup ---
+st.set_page_config(page_title="LogWise 👁️‍🗨️", layout="wide")
+st.title("👁️‍🗨️ LogWise — AI-Powered Local Log Analyzer")
+st.markdown("Welcome to **LogWise**! Upload your log file and watch it work: 🧠 **pattern analysis**, 🚨 **anomaly detection**, and 🗄️ **local storage** — no cloud involved!")
 
-# --- Database setup ---
 DB_NAME = "logs.db"
 
+# --- Database Setup ---
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -23,23 +23,27 @@ def init_db():
             message TEXT
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS chat_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            role TEXT,
+            message TEXT
+        )
+    ''')
     conn.commit()
     conn.close()
 
-# --- Store logs in DB ---
 def store_logs(df):
     conn = sqlite3.connect(DB_NAME)
     df.to_sql("logs", conn, if_exists="append", index=False)
     conn.close()
 
-# --- Read logs from DB ---
 def fetch_logs():
     conn = sqlite3.connect(DB_NAME)
     df = pd.read_sql("SELECT * FROM logs", conn)
     conn.close()
     return df
 
-# --- Analyze logs with Isolation Forest ---
 def detect_anomalies(df):
     if df.empty or len(df) < 10:
         return df, []
@@ -50,7 +54,6 @@ def detect_anomalies(df):
     anomalies = df[df['anomaly'] == -1]
     return df, anomalies
 
-# --- Parse uploaded log file ---
 def parse_log(file):
     lines = file.read().decode('utf-8').splitlines()
     data = []
@@ -62,43 +65,76 @@ def parse_log(file):
                 level = parts[1]
                 message = parts[2]
                 data.append({'timestamp': timestamp, 'level': level, 'message': message})
-        except Exception as e:
+        except:
             continue
     return pd.DataFrame(data)
 
-# --- Streamlit UI ---
-init_db()
-st.title("🧠 AI-Driven Log Aggregator (Local)")
+def store_chat(role, message):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO chat_history (role, message) VALUES (?, ?)", (role, message))
+    conn.commit()
+    conn.close()
 
-uploaded_file = st.file_uploader("Upload a log file (.log or .txt)", type=["log", "txt"])
+def fetch_chat():
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql("SELECT * FROM chat_history", conn)
+    conn.close()
+    return df
+
+# --- Init ---
+init_db()
+
+# --- Upload Log File ---
+st.chat_message("user").markdown("📂 Upload a log file (`.log` or `.txt`) to get started:")
+uploaded_file = st.file_uploader("Upload Log File", type=["log", "txt"])
 
 if uploaded_file:
     log_df = parse_log(uploaded_file)
     if not log_df.empty:
         store_logs(log_df)
-        st.success("Logs successfully stored in local database.")
+        message = "✅ Logs successfully stored in the local database."
+        st.chat_message("assistant").success(message)
+        store_chat("assistant", message)
     else:
-        st.error("No valid log entries found.")
+        message = "⚠️ No valid log entries found in the file."
+        st.chat_message("assistant").error(message)
+        store_chat("assistant", message)
 
+# --- Display Chat History from DB ---
+chat_df = fetch_chat()
+if not chat_df.empty:
+    st.subheader("🗨️ Chat History (Persistent)")
+    for _, row in chat_df.iterrows():
+        st.chat_message(row["role"]).markdown(row["message"])
+
+# --- Show Logs ---
 st.subheader("📋 Retrieved Logs")
 logs_df = fetch_logs()
 st.dataframe(logs_df, use_container_width=True)
 
+# --- Anomaly Detection ---
 if not logs_df.empty:
-    st.subheader("📊 Pattern Detection")
+    st.subheader("📊 AI Pattern & Anomaly Detection")
     analyzed_df, anomalies_df = detect_anomalies(logs_df)
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("### Anomalies Detected")
-        st.dataframe(anomalies_df[['timestamp', 'level', 'message']], use_container_width=True)
+        st.markdown("### 🔍 Anomalies Detected")
+        if not anomalies_df.empty:
+            st.dataframe(anomalies_df[['timestamp', 'level', 'message']], use_container_width=True)
+        else:
+            st.info("✨ No anomalies detected. Smooth sailing!")
 
     with col2:
-        st.markdown("### Log Message Length Distribution")
+        st.markdown("### 📈 Message Length Distribution")
         fig, ax = plt.subplots()
-        ax.hist(analyzed_df['length'], bins=20, color='skyblue', edgecolor='black')
+        ax.hist(analyzed_df['length'], bins=20, color='orchid', edgecolor='black')
+        ax.set_xlabel("Log Message Length")
+        ax.set_ylabel("Frequency")
         st.pyplot(fig)
 
 st.markdown("---")
-st.caption("Developed with ❤️ using Streamlit, SQLite, and Scikit-learn")
+st.markdown("💬 **Need help interpreting results or logs? Ask below or re-upload!**")
+st.caption("🔧 Built with ❤️ using Streamlit · SQLite · Scikit-learn · Python — by LogWise")
