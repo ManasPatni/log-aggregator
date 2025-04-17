@@ -102,7 +102,7 @@ if uploaded_file:
 
 # --- Sidebar: Copilot-style History ---
 with st.sidebar:
-    st.markdown("### 📁 Project History")
+    st.markdown("### 📁 Chat History")
 
     # You can dynamically fetch and render projects here
     project_groups = {
