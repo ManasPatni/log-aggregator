@@ -1,3 +1,6 @@
+import sys
+import pysqlite3
+sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
 import streamlit as st
 import pandas as pd
 import sqlite3
