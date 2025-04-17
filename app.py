@@ -1,107 +1,145 @@
 import streamlit as st
-from transformers import pipeline
-import random
+import pandas as pd
+import sqlite3
+from sklearn.ensemble import IsolationForest
+import matplotlib.pyplot as plt
 
-# -------------------------------
-# Question & Option Generator
-# -------------------------------
-@st.cache_resource
-def load_qg_model():
-    return pipeline("text2text-generation", model="valhalla/t5-base-qg-hl")
+# --- App Setup ---
+st.set_page_config(page_title="LogWise 👁️‍🗨️", layout="wide")
+st.title("👁️‍🗨️ LogWise — AI-Powered Local Log Analyzer")
+st.markdown("Welcome to **LogWise**! Upload your log file and watch it work: 🧠 **pattern analysis**, 🚨 **anomaly detection**, and 🗄️ **local storage** — no cloud involved!")
 
-qg_pipeline = load_qg_model()
+DB_NAME = "logs.db"
 
-def generate_mcq_from_text(text):
-    sentences = text.split('.')
-    if len(sentences) < 2:
-        return None
-    context = random.choice(sentences).strip()
-    if len(context.split()) < 2:
-        return None
-    highlight = random.choice(context.split())
-    input_text = f"highlight: {highlight} context: {context}"
+# --- Reset Database Every Refresh ---
+def reset_db():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS logs")
+    cursor.execute("DROP TABLE IF EXISTS chat_history")
+    conn.commit()
+    conn.close()
 
-    try:
-        output = qg_pipeline(input_text)[0]['generated_text']
-    except Exception as e:
-        return None
-    
-    correct_answer = highlight
-    distractors = list(set([
-        highlight[::-1].capitalize(),
-        highlight.upper(),
-        highlight.lower(),
-        highlight + "ing"
-    ]))
-    options = random.sample([correct_answer] + distractors[:3], 4)
+# --- Initialize Tables ---
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            level TEXT,
+            message TEXT
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS chat_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            role TEXT,
+            message TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-    return {
-        "question": output,
-        "options": options,
-        "answer": correct_answer
-    }
+def store_logs(df):
+    conn = sqlite3.connect(DB_NAME)
+    df.to_sql("logs", conn, if_exists="append", index=False)
+    conn.close()
 
-# -------------------------------
-# Adaptive Difficulty Manager
-# -------------------------------
-class DifficultyManager:
-    def __init__(self):
-        self.score = 0
-        self.total_questions = 0
+def fetch_logs():
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql("SELECT * FROM logs", conn)
+    conn.close()
+    return df
 
-    def record_result(self, correct):
-        self.total_questions += 1
-        if correct:
-            self.score += 1
+def detect_anomalies(df):
+    if df.empty or len(df) < 10:
+        return df, []
+    df['length'] = df['message'].str.len()
+    model = IsolationForest(contamination=0.1, random_state=42)
+    df['anomaly'] = model.fit_predict(df[['length']])
+    anomalies = df[df['anomaly'] == -1]
+    return df, anomalies
 
-    def get_difficulty(self):
-        if self.total_questions == 0:
-            return "Easy"
-        accuracy = self.score / self.total_questions
-        if accuracy > 0.75:
-            return "Hard"
-        elif accuracy > 0.5:
-            return "Medium"
-        return "Easy"
+def parse_log(file):
+    lines = file.read().decode('utf-8').splitlines()
+    data = []
+    for line in lines:
+        try:
+            if ' - ' in line:
+                parts = line.split(' - ', 2)
+                timestamp = parts[0]
+                level = parts[1]
+                message = parts[2]
+                data.append({'timestamp': timestamp, 'level': level, 'message': message})
+        except:
+            continue
+    return pd.DataFrame(data)
 
-# -------------------------------
-# Streamlit UI Layout Update
-# -------------------------------
-st.set_page_config(page_title="Adaptive MCQ Generator", layout="wide")
-st.title("🎯 AI-Driven Adaptive MCQ Generator")
+def store_chat(role, message):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO chat_history (role, message) VALUES (?, ?)", (role, message))
+    conn.commit()
+    conn.close()
 
-if 'manager' not in st.session_state:
-    st.session_state.manager = DifficultyManager()
+def fetch_chat():
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql("SELECT * FROM chat_history", conn)
+    conn.close()
+    return df
 
-left, right = st.columns([2, 2])
+# --- Run Initialization ---
+reset_db()   # <--- Clears database every refresh
+init_db()    # <--- Then re-creates tables
 
-# --- User Input (Right Side) ---
-with right:
-    st.header("🧑‍🎓 User Input")
-    text_input = st.text_area("📘 Paste Educational Content:", height=200)
+# --- Upload Log File ---
+st.chat_message("user").markdown("📂 Upload a log file (`.log` or `.txt`) to get started:")
+uploaded_file = st.file_uploader("Upload Log File", type=["log", "txt"])
 
-    if st.button("Generate MCQ"):
-        if text_input.strip():
-            mcq = generate_mcq_from_text(text_input)
-            if mcq:
-                st.session_state.mcq = mcq
-            else:
-                st.warning("⚠️ Could not generate a question. Try longer/more diverse text.")
+if uploaded_file:
+    log_df = parse_log(uploaded_file)
+    if not log_df.empty:
+        store_logs(log_df)
+        message = "✅ Logs successfully stored in the local database."
+        st.chat_message("assistant").success(message)
+        store_chat("assistant", message)
+    else:
+        message = "⚠️ No valid log entries found in the file."
+        st.chat_message("assistant").error(message)
+        store_chat("assistant", message)
 
-# --- Bot Output (Left Side) ---
-with left:
-    st.header("🤖 AI Assistant")
-    if 'mcq' in st.session_state:
-        mcq = st.session_state.mcq
-        st.markdown(f"**❓ Question:** {mcq['question']}")
-        selected_option = st.radio("🔘 Choose your answer:", mcq['options'], key="mcq_radio")
+# --- Display Chat History from DB ---
+chat_df = fetch_chat()
+if not chat_df.empty:
+    st.subheader("🗨️ Chat History (Session Only)")
+    for _, row in chat_df.iterrows():
+        st.chat_message(row["role"]).markdown(row["message"])
 
-        if st.button("Submit Answer"):
-            correct = selected_option == mcq['answer']
-            st.session_state.manager.record_result(correct)
-            if correct:
-                st.success("✅ Correct!")
-            else:
-                st.error(f"❌ Incorrect. The correct answer is: **{mcq['answer']}**")
+# --- Show Logs ---
+st.subheader("📋 Retrieved Logs")
+logs_df = fetch_logs()
+st.dataframe(logs_df, use_container_width=True)
 
-            st.info(f"📊 Current Difficulty Level: **{st.session_state.manager.get_difficulty()}**")
+# --- Anomaly Detection ---
+if not logs_df.empty:
+    st.subheader("📊 AI Pattern & Anomaly Detection")
+    analyzed_df, anomalies_df = detect_anomalies(logs_df)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("### 🔍 Anomalies Detected")
+        if not anomalies_df.empty:
+            st.dataframe(anomalies_df[['timestamp', 'level', 'message']], use_container_width=True)
+        else:
+            st.info("✨ No anomalies detected. Smooth sailing!")
+
+    with col2:
+        st.markdown("### 📈 Message Length Distribution")
+        fig, ax = plt.subplots()
+        ax.hist(analyzed_df['length'], bins=20, color='orchid', edgecolor='black')
+        ax.set_xlabel("Log Message Length")
+        ax.set_ylabel("Frequency")
+        st.pyplot(fig)
