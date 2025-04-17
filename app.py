@@ -125,6 +125,31 @@ if uploaded_file:
         st.chat_message("assistant").success(message)
         store_chat("assistant", message)
         add_project("Logging Aggregator")
+
+        # --- Logs Table ---
+        st.subheader("📋 Retrieved Logs")
+        logs_df = fetch_logs()
+        st.dataframe(logs_df, use_container_width=True)
+
+        # --- Anomaly Detection ---
+        if not logs_df.empty:
+            st.subheader("📊 AI Pattern & Anomaly Detection")
+            analyzed_df, anomalies_df = detect_anomalies(logs_df)
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("### 🔍 Anomalies Detected")
+                if not anomalies_df.empty:
+                    st.dataframe(anomalies_df[['timestamp', 'level', 'message']], use_container_width=True)
+                else:
+                    st.info("✨ No anomalies detected. Smooth sailing!")
+            with col2:
+                st.markdown("### 📈 Message Length Distribution")
+                fig, ax = plt.subplots()
+                ax.hist(analyzed_df['length'], bins=20, color='orchid', edgecolor='black')
+                ax.set_xlabel("Log Message Length")
+                ax.set_ylabel("Frequency")
+                st.pyplot(fig)
     else:
         message = "⚠️ No valid log entries found in the file."
         st.chat_message("assistant").error(message)
@@ -176,71 +201,3 @@ with st.sidebar:
                         st.experimental_rerun()
                     elif do_share:
                         st.info("📢 Share feature coming soon!")
-# --- Upload Logs ---
-st.chat_message("user").markdown("📂 Upload a log file (.log or .txt) to get started:")
-uploaded_file = st.file_uploader("Upload Log File", type=["log", "txt"])
-
-if uploaded_file:
-    log_df = parse_log(uploaded_file)
-    if not log_df.empty:
-        store_logs(log_df)
-        message = "✅ Logs successfully stored in the local database."
-        st.chat_message("assistant").success(message)
-        store_chat("assistant", message)
-        add_project("Logging Aggregator")
-
-        # --- Logs Table ---
-        st.subheader("📋 Retrieved Logs")
-        logs_df = fetch_logs()
-        st.dataframe(logs_df, use_container_width=True)
-
-        # --- Anomaly Detection ---
-        if not logs_df.empty:
-            st.subheader("📊 AI Pattern & Anomaly Detection")
-            analyzed_df, anomalies_df = detect_anomalies(logs_df)
-
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("### 🔍 Anomalies Detected")
-                if not anomalies_df.empty:
-                    st.dataframe(anomalies_df[['timestamp', 'level', 'message']], use_container_width=True)
-                else:
-                    st.info("✨ No anomalies detected. Smooth sailing!")
-            with col2:
-                st.markdown("### 📈 Message Length Distribution")
-                fig, ax = plt.subplots()
-                ax.hist(analyzed_df['length'], bins=20, color='orchid', edgecolor='black')
-                ax.set_xlabel("Log Message Length")
-                ax.set_ylabel("Frequency")
-                st.pyplot(fig)
-
-    else:
-        message = "⚠️ No valid log entries found in the file."
-        st.chat_message("assistant").error(message)
-        store_chat("assistant", message)
-
-
-# --- Logs Table ---
-st.subheader("📋 Retrieved Logs")
-logs_df = fetch_logs()
-st.dataframe(logs_df, use_container_width=True)
-
-# --- Anomaly Detection ---
-if not logs_df.empty:
-    st.subheader("📊 AI Pattern & Anomaly Detection")
-    analyzed_df, anomalies_df = detect_anomalies(logs_df)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("### 🔍 Anomalies Detected")
-        if not anomalies_df.empty:
-            st.dataframe(anomalies_df[['timestamp', 'level', 'message']], use_container_width=True)
-        else:
-            st.info("✨ No anomalies detected. Smooth sailing!")
-    with col2:
-        st.markdown("### 📈 Message Length Distribution")
-        fig, ax = plt.subplots()
-        ax.hist(analyzed_df['length'], bins=20, color='orchid', edgecolor='black')
-        ax.set_xlabel("Log Message Length")
-        ax.set_ylabel("Frequency")
-        st.pyplot(fig)
