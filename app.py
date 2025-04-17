@@ -1,7 +1,6 @@
 import sqlite3
 import streamlit as st
 import pandas as pd
-import sqlite3
 from sklearn.ensemble import IsolationForest
 import matplotlib.pyplot as plt
 
@@ -111,13 +110,41 @@ if uploaded_file:
         st.chat_message("assistant").error(message)
         store_chat("assistant", message)
 
-# --- Display Chat History in Sidebar ---
+# --- Display Chat History in Sidebar with Manage Options ---
 with st.sidebar:
     st.subheader("🗨️ Chat History (Persistent)")
     chat_df = fetch_chat()
     if not chat_df.empty:
+        selected_index = st.selectbox("Select message to manage:", chat_df.index, format_func=lambda i: f"{chat_df.at[i, 'role'].capitalize()}: {chat_df.at[i, 'message'][:40]}...")
+
+        if selected_index is not None:
+            selected_msg = chat_df.loc[selected_index]
+
+            # Rename option
+            new_message = st.text_input("✏️ Rename this message:", value=selected_msg['message'])
+            if st.button("Update Message"):
+                conn = sqlite3.connect(DB_NAME)
+                cursor = conn.cursor()
+                cursor.execute("UPDATE chat_history SET message = ? WHERE id = ?", (new_message, selected_msg['id']))
+                conn.commit()
+                conn.close()
+                st.experimental_rerun()
+
+            # Delete option
+            if st.button("🗑️ Remove Message"):
+                conn = sqlite3.connect(DB_NAME)
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM chat_history WHERE id = ?", (selected_msg['id'],))
+                conn.commit()
+                conn.close()
+                st.experimental_rerun()
+
+        # Show all messages
+        st.markdown("### 💬 All Messages")
         for _, row in chat_df.iterrows():
             st.markdown(f"**{row['role']}**: {row['message']}")
+    else:
+        st.info("No chat history found.")
 
 # --- Show Logs ---
 st.subheader("📋 Retrieved Logs")
