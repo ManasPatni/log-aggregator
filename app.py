@@ -1,17 +1,27 @@
 import sqlite3
 import streamlit as st
 import pandas as pd
+import sqlite3
 from sklearn.ensemble import IsolationForest
 import matplotlib.pyplot as plt
 
 # --- App Setup ---
 st.set_page_config(page_title="LogWise 👁️‍🗨️", layout="wide")
-st.title("🤖 LogWise — AI-Powered Log Chatbot")
-st.markdown("Chat with your logs! Upload a file and interact with AI for anomaly detection and insights — all locally!")
+st.title("👁️‍🗨️ LogWise — AI-Powered Local Log Analyzer")
+st.markdown("Welcome to **LogWise**! Upload your log file and watch it work: 🧠 **pattern analysis**, 🚨 **anomaly detection**, and 🗄️ **local storage** — no cloud involved!")
 
 DB_NAME = "logs.db"
 
-# --- Database Utilities ---
+# --- Reset Database Every Refresh ---
+def reset_db():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS logs")
+    cursor.execute("DROP TABLE IF EXISTS chat_history")
+    conn.commit()
+    conn.close()
+
+# --- Initialize Tables ---
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -57,13 +67,15 @@ def parse_log(file):
     lines = file.read().decode('utf-8').splitlines()
     data = []
     for line in lines:
-        if ' - ' in line:
-            try:
+        try:
+            if ' - ' in line:
                 parts = line.split(' - ', 2)
-                timestamp, level, message = parts
+                timestamp = parts[0]
+                level = parts[1]
+                message = parts[2]
                 data.append({'timestamp': timestamp, 'level': level, 'message': message})
-            except:
-                continue
+        except:
+            continue
     return pd.DataFrame(data)
 
 def store_chat(role, message):
@@ -79,57 +91,57 @@ def fetch_chat():
     conn.close()
     return df
 
-# --- Initialize ---
-init_db()
+# --- Run Initialization ---
+reset_db()   # <--- Clears database every refresh
+init_db()    # <--- Then re-creates tables
 
-# --- Sidebar Chat History ---
+# --- Upload Log File ---
+st.chat_message("user").markdown("📂 Upload a log file (.log or .txt) to get started:")
+uploaded_file = st.file_uploader("Upload Log File", type=["log", "txt"])
+
+if uploaded_file:
+    log_df = parse_log(uploaded_file)
+    if not log_df.empty:
+        store_logs(log_df)
+        message = "✅ Logs successfully stored in the local database."
+        st.chat_message("assistant").success(message)
+        store_chat("assistant", message)
+    else:
+        message = "⚠️ No valid log entries found in the file."
+        st.chat_message("assistant").error(message)
+        store_chat("assistant", message)
+
+# --- Display Chat History in Sidebar ---
 with st.sidebar:
-    st.header("🗨️ Chat History")
+    st.subheader("🗨️ Chat History (Persistent)")
     chat_df = fetch_chat()
     if not chat_df.empty:
         for _, row in chat_df.iterrows():
             st.markdown(f"**{row['role']}**: {row['message']}")
 
-# --- Main Chat Area ---
-st.subheader("💬 Chat Interface")
-
-# Upload Section (chat style)
-st.chat_message("user").markdown("📂 Upload your log file (`.log` or `.txt`) to begin.")
-
-uploaded_file = st.file_uploader("Choose a log file", type=["log", "txt"])
-if uploaded_file:
-    log_df = parse_log(uploaded_file)
-    if not log_df.empty:
-        store_logs(log_df)
-        message = f"✅ {len(log_df)} log entries added successfully!"
-        st.chat_message("assistant").success(message)
-        store_chat("assistant", message)
-    else:
-        message = "⚠️ No valid log lines found. Please upload a well-formatted `.log` file."
-        st.chat_message("assistant").error(message)
-        store_chat("assistant", message)
-
-# Show Logs
+# --- Show Logs ---
+st.subheader("📋 Retrieved Logs")
 logs_df = fetch_logs()
+st.dataframe(logs_df, use_container_width=True)
+
+# --- Anomaly Detection ---
 if not logs_df.empty:
-    st.chat_message("user").markdown("📋 Show me the logs.")
-    st.chat_message("assistant").dataframe(logs_df[['timestamp', 'level', 'message']], use_container_width=True)
-
-    # Anomaly detection
-    st.chat_message("user").markdown("🔍 Can you detect any anomalies?")
+    st.subheader("📊 AI Pattern & Anomaly Detection")
     analyzed_df, anomalies_df = detect_anomalies(logs_df)
-    if not anomalies_df.empty:
-        st.chat_message("assistant").markdown("🚨 **Anomalies found!** Here's what looks suspicious:")
-        st.chat_message("assistant").dataframe(anomalies_df[['timestamp', 'level', 'message']], use_container_width=True)
-    else:
-        st.chat_message("assistant").markdown("✨ All clear! No anomalies detected.")
 
-    # Chart
-    st.chat_message("assistant").markdown("📈 Here's a quick look at the message length distribution:")
-    fig, ax = plt.subplots()
-    ax.hist(analyzed_df['length'], bins=20, color='salmon', edgecolor='black')
-    ax.set_xlabel("Message Length")
-    ax.set_ylabel("Frequency")
-    st.chat_message("assistant").pyplot(fig)
-else:
-    st.info("Upload a log file to start chatting with LogWise!")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("### 🔍 Anomalies Detected")
+        if not anomalies_df.empty:
+            st.dataframe(anomalies_df[['timestamp', 'level', 'message']], use_container_width=True)
+        else:
+            st.info("✨ No anomalies detected. Smooth sailing!")
+
+    with col2:
+        st.markdown("### 📈 Message Length Distribution")
+        fig, ax = plt.subplots()
+        ax.hist(analyzed_df['length'], bins=20, color='orchid', edgecolor='black')
+        ax.set_xlabel("Log Message Length")
+        ax.set_ylabel("Frequency")
+        st.pyplot(fig)
