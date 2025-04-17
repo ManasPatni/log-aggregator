@@ -4,14 +4,13 @@ import pandas as pd
 from sklearn.ensemble import IsolationForest
 import matplotlib.pyplot as plt
 
-# --- App Setup ---
 st.set_page_config(page_title="LogWise 👁️‍🗨️", layout="wide")
 st.title("👁️‍🗨️ LogWise — AI-Powered Local Log Analyzer")
 st.markdown("Welcome to **LogWise**! Upload your log file and watch it work: 🧠 **pattern analysis**, 🚨 **anomaly detection**, and 🗄️ **local storage** — no cloud involved!")
 
 DB_NAME = "logs.db"
 
-# --- Reset Database Every Refresh ---
+# --- DB Reset and Init ---
 def reset_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -20,28 +19,22 @@ def reset_db():
     conn.commit()
     conn.close()
 
-# --- Initialize Tables ---
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            level TEXT,
-            message TEXT
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS chat_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            role TEXT,
-            message TEXT
-        )
-    ''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT,
+        level TEXT,
+        message TEXT)''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS chat_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role TEXT,
+        message TEXT)''')
     conn.commit()
     conn.close()
 
+# --- Data Ops ---
 def store_logs(df):
     conn = sqlite3.connect(DB_NAME)
     df.to_sql("logs", conn, if_exists="append", index=False)
@@ -69,10 +62,7 @@ def parse_log(file):
         try:
             if ' - ' in line:
                 parts = line.split(' - ', 2)
-                timestamp = parts[0]
-                level = parts[1]
-                message = parts[2]
-                data.append({'timestamp': timestamp, 'level': level, 'message': message})
+                data.append({'timestamp': parts[0], 'level': parts[1], 'message': parts[2]})
         except:
             continue
     return pd.DataFrame(data)
@@ -90,9 +80,9 @@ def fetch_chat():
     conn.close()
     return df
 
-# --- Run Initialization ---
-reset_db()   # <--- Clears database every refresh
-init_db()    # <--- Then re-creates tables
+# --- Init ---
+reset_db()
+init_db()
 
 # --- Upload Log File ---
 st.chat_message("user").markdown("📂 Upload a log file (.log or .txt) to get started:")
@@ -110,43 +100,29 @@ if uploaded_file:
         st.chat_message("assistant").error(message)
         store_chat("assistant", message)
 
-# --- Display Chat History in Sidebar with Manage Options ---
+# --- Sidebar: Copilot-style History ---
 with st.sidebar:
-    st.subheader("🗨️ Chat History (Persistent)")
-    chat_df = fetch_chat()
-    if not chat_df.empty:
-        selected_index = st.selectbox("Select message to manage:", chat_df.index, format_func=lambda i: f"{chat_df.at[i, 'role'].capitalize()}: {chat_df.at[i, 'message'][:40]}...")
+    st.markdown("### 📁 Project History")
 
-        if selected_index is not None:
-            selected_msg = chat_df.loc[selected_index]
+    # You can dynamically fetch and render projects here
+    project_groups = {
+        "Today": ["Logging Aggregator"],
+        "Yesterday": ["AI-driven MCQ Generator"],
+        "Previous 7 Days": ["learning python (hidevs)", "Beginner Python Questions"],
+        "Previous 30 Days": ["Math Problem Assistant", "language translator project"]
+    }
 
-            # Rename option
-            new_message = st.text_input("✏️ Rename this message:", value=selected_msg['message'])
-            if st.button("Update Message"):
-                conn = sqlite3.connect(DB_NAME)
-                cursor = conn.cursor()
-                cursor.execute("UPDATE chat_history SET message = ? WHERE id = ?", (new_message, selected_msg['id']))
-                conn.commit()
-                conn.close()
-                st.experimental_rerun()
+    for section, projects in project_groups.items():
+        st.markdown(f"#### {section}")
+        for proj in projects:
+            with st.expander(proj, expanded=False):
+                col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+                with col1: st.button("📤", key=f"{proj}-share", help="Share")
+                with col2: st.button("✏️", key=f"{proj}-rename", help="Rename")
+                with col3: st.button("📦", key=f"{proj}-archive", help="Archive")
+                with col4: st.button("🗑️", key=f"{proj}-delete", help="Delete")
 
-            # Delete option
-            if st.button("🗑️ Remove Message"):
-                conn = sqlite3.connect(DB_NAME)
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM chat_history WHERE id = ?", (selected_msg['id'],))
-                conn.commit()
-                conn.close()
-                st.experimental_rerun()
-
-        # Show all messages
-        st.markdown("### 💬 All Messages")
-        for _, row in chat_df.iterrows():
-            st.markdown(f"**{row['role']}**: {row['message']}")
-    else:
-        st.info("No chat history found.")
-
-# --- Show Logs ---
+# --- Logs Table ---
 st.subheader("📋 Retrieved Logs")
 logs_df = fetch_logs()
 st.dataframe(logs_df, use_container_width=True)
@@ -157,7 +133,6 @@ if not logs_df.empty:
     analyzed_df, anomalies_df = detect_anomalies(logs_df)
 
     col1, col2 = st.columns(2)
-
     with col1:
         st.markdown("### 🔍 Anomalies Detected")
         if not anomalies_df.empty:
