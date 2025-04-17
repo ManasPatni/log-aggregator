@@ -111,12 +111,13 @@ if uploaded_file:
         st.chat_message("assistant").error(message)
         store_chat("assistant", message)
 
-# --- Display Chat History from DB ---
-chat_df = fetch_chat()
-if not chat_df.empty:
-    st.subheader("🗨️ Chat History (Session Only)")
-    for _, row in chat_df.iterrows():
-        st.chat_message(row["role"]).markdown(row["message"])
+# --- Display Chat History in Sidebar ---
+with st.sidebar:
+    st.subheader("🗨️ Chat History (Persistent)")
+    chat_df = fetch_chat()
+    if not chat_df.empty:
+        for _, row in chat_df.iterrows():
+            st.markdown(f"**{row['role']}**: {row['message']}")
 
 # --- Show Logs ---
 st.subheader("📋 Retrieved Logs")
