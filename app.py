@@ -5,9 +5,9 @@ from datetime import datetime, timedelta
 from sklearn.ensemble import IsolationForest
 import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="LogWise 👁️‍🗨️", layout="wide")
-st.title("👁️‍🗨️ LogWise — AI-Powered Local Log Analyzer")
-st.markdown("Welcome to **LogWise**! Upload your log file and watch it work: 🧠 **pattern analysis**, 🚨 **anomaly detection**, and 🗄️ **local storage** — no cloud involved!")
+st.set_page_config(page_title="LogWise 🔁️", layout="wide")
+st.title("🔁️ LogWise — AI-Powered Local Log Analyzer")
+st.markdown("Welcome to **LogWise**! Upload your log file and watch it work: 🧐 **pattern analysis**, 🚨 **anomaly detection**, and 🗔️ **local storage** — no cloud involved!")
 
 DB_NAME = "logs.db"
 
@@ -155,20 +155,27 @@ with st.sidebar:
         st.markdown(f"#### {section}")
         for row in rows:
             with st.expander(row["title"], expanded=False):
-                new_title = st.text_input(f"✏️ Rename {row['id']}", value=row["title"], key=f"rename-{row['id']}")
-                col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-                with col1:
-                    st.button("📤", key=f"share-{row['id']}", help="Share (not implemented)")
-                with col2:
-                    if st.button("✏️", key=f"btn-rename-{row['id']}"):
+                form_key = f"form_{row['id']}"
+                with st.form(form_key):
+                    new_title = st.text_input("Rename", value=row["title"], key=f"rename_input_{row['id']}")
+                    col1, col2, col3, col4 = st.columns(4)
+                    do_share = col1.form_submit_button("📤", use_container_width=True)
+                    do_rename = col2.form_submit_button("✏️", use_container_width=True)
+                    do_archive = col3.form_submit_button("🛆", use_container_width=True)
+                    do_delete = col4.form_submit_button("🗑️", use_container_width=True)
+
+                    if do_rename:
                         rename_project(row["id"], new_title)
+                        st.success("Renamed successfully!")
                         st.experimental_rerun()
-                with col3:
-                    st.button("📦", key=f"archive-{row['id']}", help="Archive (not implemented)")
-                with col4:
-                    if st.button("🗑️", key=f"delete-{row['id']}"):
+                    elif do_archive:
+                        st.info("🛆 Archive not implemented yet.")
+                    elif do_delete:
                         delete_project(row["id"])
+                        st.warning("Deleted.")
                         st.experimental_rerun()
+                    elif do_share:
+                        st.info("📢 Share feature coming soon!")
 
 # --- Logs Table ---
 st.subheader("📋 Retrieved Logs")
