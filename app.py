@@ -122,6 +122,20 @@ def fetch_chat():
     conn.close()
     return df[::-1]  # reverse for chronological order
 
+def rename_chat(chat_id, new_message):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE chat_history SET message = ? WHERE id = ?", (new_message, chat_id))
+    conn.commit()
+    conn.close()
+
+def delete_chat(chat_id):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM chat_history WHERE id = ?", (chat_id,))
+    conn.commit()
+    conn.close()
+
 # --- INIT ---
 reset_db()
 init_db()
@@ -219,5 +233,18 @@ with st.sidebar:
     st.markdown("### 💬 Chat History")
     chat_df = fetch_chat()
     for _, row in chat_df.iterrows():
-        role_icon = "👤" if row['role'] == 'user' else "🤖"
-        st.markdown(f"{role_icon} **{row['role'].capitalize()}**: {row['message']}")
+        with st.expander(f"{row['role'].capitalize()} - {row['message']}", expanded=False):
+            form_key = f"chat_form_{row['id']}"
+            with st.form(form_key):
+                new_msg = st.text_area("Edit Message", value=row['message'], key=f"chat_edit_{row['id']}")
+                col1, col2 = st.columns([1, 1])
+                rename_btn = col1.form_submit_button("✏️ Rename")
+                delete_btn = col2.form_submit_button("🗑️ Delete")
+                if rename_btn:
+                    rename_chat(row['id'], new_msg)
+                    st.success("Chat renamed!")
+                    st.experimental_rerun()
+                elif delete_btn:
+                    delete_chat(row['id'])
+                    st.warning("Chat deleted.")
+                    st.experimental_rerun()
