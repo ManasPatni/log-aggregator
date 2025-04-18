@@ -176,18 +176,18 @@ with st.sidebar:
         category = categorize_date(row["created_at"])
         categorized.setdefault(category, []).append(row)
 
-    for section, rows in categorized.items():
-        st.markdown(f"#### {section}")
-        for row in rows:
-            with st.expander(row["title"], expanded=False):
-                form_key = f"form_{row['id']}"
-                with st.form(form_key):
-                    new_title = st.text_input("Rename", value=row["title"], key=f"rename_input_{row['id']}")
-                    col1, col2, col3, col4 = st.columns(4)
-                    do_share = col1.form_submit_button("📤", use_container_width=True)
-                    do_rename = col2.form_submit_button("✏️", use_container_width=True)
-                    do_archive = col3.form_submit_button("🛆", use_container_width=True)
-                    do_delete = col4.form_submit_button("🗑️", use_container_width=True)
+    # for section, rows in categorized.items():
+    #     st.markdown(f"#### {section}")
+    #     for row in rows:
+    #         with st.expander(row["title"], expanded=False):
+    #             form_key = f"form_{row['id']}"
+    #             with st.form(form_key):
+    #                 new_title = st.text_input("Rename", value=row["title"], key=f"rename_input_{row['id']}")
+    #                 col1, col2, col3, col4 = st.columns(4)
+    #                 do_share = col1.form_submit_button("📤", use_container_width=True)
+    #                 do_rename = col2.form_submit_button("✏️", use_container_width=True)
+    #                 do_archive = col3.form_submit_button("🛆", use_container_width=True)
+    #                 do_delete = col4.form_submit_button("🗑️", use_container_width=True)
 
                     if do_rename:
                         rename_project(row["id"], new_title)
