@@ -5,7 +5,7 @@ LogWise is a secure, AI-powered tool for analyzing system logs. Whether you're a
 - LinkedIn: [Manas Patni][https://www.linkedin.com/in/manas-patni-0b1013235/)
 - Email: manaspatni07@gmail.com 
 - Phone: 9405957126
-- project demo Youtube link: 
+- project demo Youtube link: https://www.youtube.com/watch?v=Kx0-YDmsB3I
 
 **📌 Overview **
 LogWise allows you to upload local log files (.log, .txt, or .pdf), store them in a local SQLite database, and apply machine learning to detect anomalies in your logs. It features a user-friendly Streamlit interface and includes project history, chat memory, and visualizations — all while keeping your data private and local.
