@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from sklearn.ensemble import IsolationForest
 import matplotlib.pyplot as plt
+import PyPDF2  # Library to handle PDF files
 
 st.set_page_config(page_title="LogWise 🔁️", layout="wide")
 st.title("LogWise 🔁️ - AI-Powered Local Log Analyzer")
@@ -109,6 +110,13 @@ def parse_log(file):
             continue
     return pd.DataFrame(data)
 
+def parse_pdf(file):
+    reader = PyPDF2.PdfReader(file)
+    text = ""
+    for page in range(len(reader.pages)):
+        text += reader.pages[page].extract_text()
+    return text
+
 def store_chat(role, message):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -127,11 +135,16 @@ reset_db()
 init_db()
 
 # --- Upload Logs ---
-st.chat_message("user").markdown(":file_folder: Upload a log file (.log or .txt) to get started:")
-uploaded_file = st.file_uploader("Upload Log File", type=["log", "txt"])
+st.chat_message("user").markdown(":file_folder: Upload a log file (.log, .txt, or .pdf) to get started:")
+uploaded_file = st.file_uploader("Upload Log File", type=["log", "txt", "pdf"])
 
 if uploaded_file:
-    log_df = parse_log(uploaded_file)
+    if uploaded_file.type == "application/pdf":
+        log_text = parse_pdf(uploaded_file)
+        log_df = pd.DataFrame([{'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 'level': 'INFO', 'message': log_text}])
+    else:
+        log_df = parse_log(uploaded_file)
+    
     if not log_df.empty:
         store_logs(log_df)
         message = "Logs successfully stored in the local database."
