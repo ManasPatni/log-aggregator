@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from sklearn.ensemble import IsolationForest
 import matplotlib.pyplot as plt
 
+# --- Streamlit Page Config ---
 st.set_page_config(page_title="LogWise 🔁️", layout="wide")
 st.title("LogWise 🔁️ - AI-Powered Local Log Analyzer")
 st.markdown("""
@@ -76,7 +77,7 @@ def rename_project(project_id, new_title):
     conn.commit()
     conn.close()
 
-# --- Logs/Chat Functions ---
+# --- Logs Functions ---
 def store_logs(df):
     conn = sqlite3.connect(DB_NAME)
     df.to_sql("logs", conn, if_exists="append", index=False)
@@ -109,6 +110,7 @@ def parse_log(file):
             continue
     return pd.DataFrame(data)
 
+# --- Chat Functions ---
 def store_chat(role, message):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -120,69 +122,63 @@ def fetch_chat():
     conn = sqlite3.connect(DB_NAME)
     df = pd.read_sql("SELECT * FROM chat_history ORDER BY id DESC LIMIT 20", conn)
     conn.close()
-    return df[::-1]  # reverse for chronological order
+    return df[::-1]  # reverse to chronological order
 
-def rename_chat(chat_id, new_message):
+def rename_chat_entry(chat_id, new_message):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("UPDATE chat_history SET message = ? WHERE id = ?", (new_message, chat_id))
     conn.commit()
     conn.close()
 
-def delete_chat(chat_id):
+def delete_chat_entry(chat_id):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM chat_history WHERE id = ?", (chat_id,))
     conn.commit()
     conn.close()
 
-# --- INIT ---
+# --- Initialize ---
 reset_db()
 init_db()
 
 # --- Upload Logs ---
-st.chat_message("user").markdown(":file_folder: Upload a log file (.log or .txt) to get started:")
+st.markdown("### :file_folder: Upload a log file (.log or .txt) to get started:")
 uploaded_file = st.file_uploader("Upload Log File", type=["log", "txt"])
 
 if uploaded_file:
     log_df = parse_log(uploaded_file)
     if not log_df.empty:
         store_logs(log_df)
-        message = "Logs successfully stored in the local database."
-        st.chat_message("assistant").success(message)
-        store_chat("assistant", message)
+        store_chat("assistant", "Logs successfully stored in the local database.")
         add_project("Logging Aggregator")
 
-        # --- Logs Table ---
         st.subheader(":clipboard: Retrieved Logs")
         logs_df = fetch_logs()
         st.dataframe(logs_df, use_container_width=True)
 
-        # --- Anomaly Detection ---
-        if not logs_df.empty:
-            st.subheader(":bar_chart: AI Pattern & Anomaly Detection")
-            analyzed_df, anomalies_df = detect_anomalies(logs_df)
+        st.subheader(":bar_chart: AI Pattern & Anomaly Detection")
+        analyzed_df, anomalies_df = detect_anomalies(logs_df)
 
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("### :mag: Anomalies Detected")
-                if not anomalies_df.empty:
-                    st.dataframe(anomalies_df[['timestamp', 'level', 'message']], use_container_width=True)
-                else:
-                    st.info(":sparkles: No anomalies detected. Smooth sailing!")
-            with col2:
-                st.markdown("### :chart_with_upwards_trend: Message Length Distribution")
-                fig, ax = plt.subplots()
-                ax.hist(analyzed_df['length'], bins=20, color='mediumseagreen', edgecolor='black')
-                ax.set_xlabel("Log Message Length")
-                ax.set_ylabel("Frequency")
-                st.pyplot(fig)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### :mag: Anomalies Detected")
+            if not anomalies_df.empty:
+                st.dataframe(anomalies_df[['timestamp', 'level', 'message']], use_container_width=True)
+            else:
+                st.info(":sparkles: No anomalies detected. Smooth sailing!")
+        with col2:
+            st.markdown("### :chart_with_upwards_trend: Message Length Distribution")
+            fig, ax = plt.subplots()
+            ax.hist(analyzed_df['length'], bins=20, color='mediumseagreen', edgecolor='black')
+            ax.set_xlabel("Log Message Length")
+            ax.set_ylabel("Frequency")
+            st.pyplot(fig)
     else:
-        message = "No valid log entries found in the file."
-        st.chat_message("assistant").error(message)
-        store_chat("assistant", message)
+        store_chat("assistant", "No valid log entries found in the file.")
+        st.error("No valid log entries found in the file.")
 
-# --- Sidebar Project & Chat History UI ---
+# --- Sidebar UI ---
 with st.sidebar:
     st.markdown("### 🕒 Project History")
     projects = fetch_projects()
@@ -233,18 +229,26 @@ with st.sidebar:
     st.markdown("### 💬 Chat History")
     chat_df = fetch_chat()
     for _, row in chat_df.iterrows():
-        with st.expander(f"{row['role'].capitalize()} - {row['message']}", expanded=False):
+        with st.expander(f"{'👤' if row['role'] == 'user' else '🤖'} {row['role'].capitalize()} - {row['message']}", expanded=False):
             form_key = f"chat_form_{row['id']}"
             with st.form(form_key):
-                new_msg = st.text_area("Edit Message", value=row['message'], key=f"chat_edit_{row['id']}")
-                col1, col2 = st.columns([1, 1])
-                rename_btn = col1.form_submit_button("✏️ Rename")
-                delete_btn = col2.form_submit_button("🗑️ Delete")
-                if rename_btn:
-                    rename_chat(row['id'], new_msg)
-                    st.success("Chat renamed!")
+                new_message = st.text_area("Rename", value=row['message'], key=f"chat_input_{row['id']}")
+
+                col1, col2, col3, col4 = st.columns(4)
+                do_share = col1.form_submit_button(":outbox_tray:", use_container_width=True)
+                do_rename = col2.form_submit_button(":pencil2:", use_container_width=True)
+                do_archive = col3.form_submit_button(":inbox_tray:", use_container_width=True)
+                do_delete = col4.form_submit_button(":wastebasket:", use_container_width=True)
+
+                if do_rename:
+                    rename_chat_entry(row["id"], new_message)
+                    st.success("Chat message renamed!")
                     st.experimental_rerun()
-                elif delete_btn:
-                    delete_chat(row['id'])
-                    st.warning("Chat deleted.")
+                elif do_delete:
+                    delete_chat_entry(row["id"])
+                    st.warning("Chat message deleted.")
                     st.experimental_rerun()
+                elif do_archive:
+                    st.info(":inbox_tray: Archive feature not implemented yet.")
+                elif do_share:
+                    st.info(":outbox_tray: Share feature coming soon!")
